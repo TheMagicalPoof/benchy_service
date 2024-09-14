@@ -6,6 +6,7 @@
     import DropDown from "../lib/DropDown.svelte";
     import { fade } from 'svelte/transition';
 	import ToggleBox from "../lib/ToggleBox.svelte";
+	import InputBox from "../lib/InputBox.svelte";
     
     let dropdowns = [];
     const typedata = [
@@ -216,8 +217,12 @@
                 
             </div>
             <div class="datarowbot">
-                <!-- <Textarea class="p-10" {...textareaprops} /> -->
-                <ToggleBox on:toggle={(e) => {console.log(e.detail)}}/>
+                <InputBox/>
+                <div class="rightcontainer">
+                    <ToggleBox on:toggle={(e) => {console.log(e.detail)}} name={"Отразить:"} isRightDir={true} />
+                    <ToggleBox on:toggle={(e) => {console.log(e.detail)}} name={"Переключалка:"} isRightDir={true} />
+                    
+                </div>
             </div>
         </div>
     </div>
@@ -275,7 +280,12 @@
         font-size: 60px;
 
         z-index: 2;
+    }
 
+    .rightcontainer {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
 
     .input-file {
@@ -370,6 +380,9 @@
     .datarowbot {
         height: 60%;
         width: 100%;
+        display: flex;
+        flex-direction: row;
+
 
     }
 
