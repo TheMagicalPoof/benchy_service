@@ -96,50 +96,50 @@
 
     // }
 
-    function uploadHandler(event) { 
-        event.preventDefault();
-        fileUploader(event.target.files)
-    };
+    // function uploadHandler(event) { 
+    //     event.preventDefault();
+    //     fileUploader(event.target.files)
+    // };
 
-    function dropHandler(event) { 
-        event.preventDefault();
-        isOverlayActive = false;
+    // function dropHandler(event) { 
+    //     event.preventDefault();
+    //     isOverlayActive = false;
 
-        if(event.dataTransfer?.files) {
-            fileUploader(event.dataTransfer.files);
-            return;
-        };
+    //     // if(event.dataTransfer?.files) {
+    //     //     fileUploader(event.dataTransfer.files);
+    //     //     return;
+    //     // };
 
-        if(event.detail?.files) {
-            fileUploader(event.detail.files);
-            return;
-        };
-    };
+    //     // if(event.detail?.files) {
+    //     //     fileUploader(event.detail.files);
+    //     //     return;
+    //     // };
+    // };
 
-    function fileUploader(files) {
+    // function fileUploader(files) {
 
-        for(let i = 0; i < files.length; i++) {
+    //     for(let i = 0; i < files.length; i++) {
             
-            if (!files[i]["name"].toLowerCase().endsWith(".stl")) return;
-            items.push(files[i]);
-        };
-        if (files.lenght <= 0) return;
+    //         if (!files[i]["name"].toLowerCase().endsWith(".stl")) return;
+    //         items.push(files[i]);
+    //     };
+    //     if (files.lenght <= 0) return;
 
-        itemsIsEmpty = "";
-        items = [...items];
+    //     itemsIsEmpty = "";
+    //     items = [...items];
         
-        itemSelect(items.length -1);
-        // viewer.renderStl(items.at(-1));
-        // activeItem = items.index(items.at(-1));
-    };
+    //     itemSelect(items.length -1);
+    //     // viewer.renderStl(items.at(-1));
+    //     // activeItem = items.index(items.at(-1));
+    // };
 
     
-    async function itemSelect(index) {
-        console.log(index)
-        activeItem = index;
-        await viewer.renderStl(items[index])
+    // async function itemSelect(index) {
+    //     console.log(index)
+    //     activeItem = index;
+    //     await viewer.renderStl(items[index])
 
-    };
+    // };
 
     function handleDragEnter() {
         isOverlayActive = true;
@@ -167,78 +167,30 @@
 
 </script>
 
-<svelte:body on:dragenter|self={handleDragEnter} on:dragover={(e) => {e.preventDefault()}}/>
+<!-- <svelte:body on:dragenter|self={handleDragEnter} on:dragover={(e) => {e.preventDefault()}}/> -->
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
-<div class="midbody" on:drop={dropHandler} on:dragover={(e) => e.preventDefault()}>
-    <div class="explorer">
-        <div class="wrapper">
-            <div class="title">СПИСОК ФАЙЛОВ</div>
-            <div class="filelist {itemsIsEmpty}" bind:this={explorer}>
-                {#each items as item, index(item)}
-                <!-- svelte-ignore a11y-click-events-have-key-events -->
-                <div class=file class:active={index == activeItem} on:click={() => itemSelect(index)}>{item["name"]}</div>
-                {/each}
-            
-            </div>
-
-            <label class="input-file">
-                <input type="file" multiple="multiple" accept=".stl" bind:this={files} on:change={uploadHandler}/>		
-                <span>Выберите файл</span>
-            </label>
-
-        </div>
-    </div>
+<div class="midbody">
     
-    <div class="itemfield">
-        <div class="viewfield">
-            <StlViewer bind:this={viewer} borderRadius="0px 10px 0px 0px" autoRender={false} enDrop={false}/>
-        </div>
-        <div class="itemdata">
-            <div class="datarowtop">
-                <DropDown placeholder="Тип печати" items={typedata}
-                    on:select={selected}
-                    on:click={() => hideExcept(0)}
-                    bind:this={dropdowns[0]}/>
+    
 
-                <DropDown placeholder="Материал" items={materialdata}
-                    on:select={selected}
-                    on:click={() => hideExcept(1)}
-                    bind:this={dropdowns[1]}/>
-
-                 
-                
-                <!-- <button class="remove" title="Удалить модель"></button> -->
-                <div class="quantity">
-                    <input type="number" min=1 max=300 step=1 placeholder="Кол-во"/>
-                </div>
-
-
-                
-            </div>
-            <div class="datarowbot">
-                <InputBox/>
-                <div class="rightcontainer">
-                    <ToggleBox on:toggle={(e) => {console.log(e.detail)}} name={"Отразить:"} isRightDir={true} />
-                    <ToggleBox on:toggle={(e) => {console.log(e.detail)}} name={"Переключалка:"} isRightDir={true} />
-                    
-                </div>
-            </div>
-        </div>
-    </div>
+    <StlViewer bind:this={viewer} autoRender={false}
+        enDrop={true} enMeshVisibleButton={true} enMeshColorPicker={true}/>
+   
+<!-- 
     {#if isOverlayActive}
     <div class="dropwrapper" transition:fade={{delay: 100, duration: 200}}>
         <div class="droparea"> ПЕРЕТАЩИТЕ ФАЙЛЫ СЮДА</div>
     </div>
-    {/if}
+    {/if} -->
 
     
 </div>
 
-{#if isOverlayActive}
+<!-- {#if isOverlayActive} -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div class="overlay" transition:fade={{duration: 400}} on:dragleave={handleDragLeave} on:drop={handleDragLeave}/>
-{/if}
+    <!-- <div class="overlay" transition:fade={{duration: 400}} on:dragleave={handleDragLeave} on:drop={handleDragLeave}/> -->
+<!-- {/if} -->
 
 
 
