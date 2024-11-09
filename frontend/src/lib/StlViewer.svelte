@@ -49,6 +49,58 @@
 
 		}
 
+		autoScale(object3D) {
+			// Вычисляем описанную сферу объекта
+			const boundingSphere = new THREE.Sphere();
+			new THREE.Box3().setFromObject(object3D).getBoundingSphere(boundingSphere);
+
+			// Получаем направление камеры
+			const cameraDirection = new THREE.Vector3();
+			this.camera.getWorldDirection(cameraDirection);
+
+			// Вычисляем вектор от камеры до объекта
+			const toObject = new THREE.Vector3().subVectors(boundingSphere.center, this.camera.position);
+
+			// Проецируем вектор на направление камеры, чтобы получить расстояние вдоль линии взгляда
+			const distance = cameraDirection.dot(toObject);
+
+			if (distance <= 0) {
+				console.warn("Объект находится позади камеры или слишком близко.");
+				return object3D;
+			}
+
+			// Вычисляем размеры фрустума на расстоянии до объекта
+			const fovInRadians = THREE.MathUtils.degToRad(this.camera.fov);
+			const frustumHeight = 2 * distance * Math.tan(fovInRadians / 2);
+			const frustumWidth = frustumHeight * this.camera.aspect;
+
+			// Вычисляем необходимый масштаб для вписывания объекта
+			const scale = Math.min(
+				frustumWidth / (2 * boundingSphere.radius),
+				frustumHeight / (2 * boundingSphere.radius)
+			);
+
+			// Создаем группу и добавляем в нее объект
+			const group = new THREE.Group();
+			this.scene.add(group);
+			group.add(object3D);
+
+			// Сбрасываем позицию объекта внутри группы
+			object3D.position.sub(boundingSphere.center);
+
+			// Применяем масштаб к группе
+			group.scale.set(scale, scale, scale);
+
+			// Устанавливаем позицию группы так, чтобы объект был на нужном расстоянии и в центре вида камеры
+			const newPosition = cameraDirection.clone().multiplyScalar(distance).add(this.camera.position);
+			group.position.copy(newPosition);
+
+			// Опционально: поворачиваем камеру на объект
+			this.camera.lookAt(newPosition);
+
+			return group;
+		}
+
 		viewerResize(resolutionWidth=1920, resolutionHeight=1080) // Ресайз окна сцены
 		{
 			// height = viewField.clientHeight;
@@ -67,7 +119,8 @@
 			this.scene.add(this.ambiantLight);
 			this.scene.add(this.directionalLight);
 
-			odjectsToAdd.forEach(obj => this.scene.add(obj));
+			odjectsToAdd.forEach(obj => this.scene.add(this.autoScale(obj)));
+			
 
 		}
 
@@ -96,6 +149,9 @@
 		_initCamera() // Инициализщация камеры
 		{
 			this.camera = new THREE.PerspectiveCamera(75, this.width/this.height, 0.1, 1000);
+			this.camera.position.z = 5;
+			this.camera.position.x = 5;
+			this.camera.position.y = 5;
 		}
 
 		_initControls() // Инициализация контроллера управления
@@ -125,8 +181,96 @@
 
 	}
 
+function createFrustumLines(frustum) {
+    const points = [];
+    const planes = frustum.planes;
+
+    for (let i = 0; i < 4; i++) {
+        const start = new THREE.Vector3();
+        const end = new THREE.Vector3();
+        const normal = planes[i].normal.clone();
+
+        const d = planes[i].constant;
+
+        start.copy(normal).multiplyScalar(d);
+        end.copy(normal).multiplyScalar(d + 10); // Длина линии
+
+        points.push(start, end);
+    }
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 });
+    return new THREE.LineSegments(geometry, lineMaterial);
+}
 
 
+function createFrustumVisual(camera) {
+    const geometry = new THREE.BufferGeometry();
+
+    // Define the 8 corners of the frustum in NDC space
+    const ndcCorners = [
+        new THREE.Vector3(-1, -1, -1), // Near Bottom Left
+        new THREE.Vector3(1, -1, -1),  // Near Bottom Right
+        new THREE.Vector3(1, 1, -1),   // Near Top Right
+        new THREE.Vector3(-1, 1, -1),  // Near Top Left
+        new THREE.Vector3(-1, -1, 1),  // Far Bottom Left
+        new THREE.Vector3(1, -1, 1),   // Far Bottom Right
+        new THREE.Vector3(1, 1, 1),    // Far Top Right
+        new THREE.Vector3(-1, 1, 1)    // Far Top Left
+    ];
+
+    // Unproject NDC corners to world space
+    const worldCorners = ndcCorners.map(ndcPoint => ndcPoint.clone().unproject(camera));
+
+    // Convert world corner points to a typed array for BufferGeometry
+    const vertices = new Float32Array(worldCorners.length * 3);
+    worldCorners.forEach((point, index) => {
+        vertices[index * 3] = point.x;
+        vertices[index * 3 + 1] = point.y;
+        vertices[index * 3 + 2] = point.z;
+    });
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+
+    // Define the indices for the faces of the frustum
+    const indices = [
+        // Near plane
+        0, 1, 2, 2, 3, 0,
+        // Far plane
+        4, 5, 6, 6, 7, 4,
+        // Sides
+        0, 1, 5, 5, 4, 0,
+        1, 2, 6, 6, 5, 1,
+        2, 3, 7, 7, 6, 2,
+        3, 0, 4, 4, 7, 3
+    ];
+
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    // Create a semi-transparent material for the frustum
+    // const material = new THREE.LineBasicMaterial({
+    //     color: 0x00ff00,
+    //     side: THREE.DoubleSide,
+    //     transparent: true,
+    //     opacity: 0.5
+    // });
+
+	const material = new THREE.LineDashedMaterial(
+            { 
+            color: 0xffff00,
+            linewidth: 5,
+            scale: 2,
+            dashSize: 3,
+            gapSize: 1,
+            // visible: this.enabled
+            }
+        );
+
+    const frustumMesh = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), material);
+
+    return frustumMesh;
+}
 
 // Функция для десериализации Object3D
 function deserializeObject3D(data, arrayBuffers) {
@@ -211,6 +355,8 @@ function deserializeObject3D(data, arrayBuffers) {
 			const { data, arrayBuffers } = event.data;
 
 			const object3D = deserializeObject3D(data, arrayBuffers);
+
+
 
 			// Добавляем объект в сцену
 			sm.updateScene([object3D]);
