@@ -1,7 +1,6 @@
 <script>
 	import * as THREE from "three"
     import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
-    import { STLLoader } from 'three/addons/loaders/STLLoader'
 	import { createEventDispatcher } from 'svelte'
 	import { fade } from 'svelte/transition';
 
@@ -96,7 +95,7 @@
 			group.position.copy(newPosition);
 
 			// Опционально: поворачиваем камеру на объект
-			this.camera.lookAt(newPosition);
+			// this.camera.lookAt(newPosition);
 
 			return group;
 		}
@@ -113,15 +112,27 @@
 			this.renderer.setSize(this.width, this.height);
 		}
 
-		updateScene(odjectsToAdd = []) // Обновить сцену, с элементами в массиве
-		{
-			this.scene.clear()
-			this.scene.add(this.ambiantLight);
-			this.scene.add(this.directionalLight);
+		updateScene(odject3D) // Обновить сцену, с элементами в массиве
+		{	
+			this._resetScene();
 
-			odjectsToAdd.forEach(obj => this.scene.add(this.autoScale(obj)));
+			const lights = new THREE.Group();
+			lights.add(this.ambiantLight);
+			lights.add(this.directionalLight);
+			this.scene.add(lights);
+
+
+			// this.scene.add(createFrustumVisual(this.camera));
+
+			this.scene.add(this.autoScale(odject3D));
 			
 
+		}
+
+		_resetScene() // Сбросить сцену
+		{	
+			this.scene.clear();
+			// this._initCamera();
 		}
 
 		_initScene() // Инициализация сцены
@@ -131,8 +142,9 @@
 			this._initCamera();
 			this._initControls();
 			this._initLight();
-			this.updateScene();
+			// this.updateScene();
 			this._startLoop();
+
 		}
 
 		_initRenderer() //Инициализация рендерера
@@ -203,7 +215,7 @@ function createFrustumLines(frustum) {
     return new THREE.LineSegments(geometry, lineMaterial);
 }
 
-
+//визуализация фрустума
 function createFrustumVisual(camera) {
     const geometry = new THREE.BufferGeometry();
 
@@ -273,73 +285,242 @@ function createFrustumVisual(camera) {
 }
 
 // Функция для десериализации Object3D
-function deserializeObject3D(data, arrayBuffers) {
+// function deserializeObject3D(data, arrayBuffers) {
+//     let object;
+
+//     // Создаем объект нужного типа
+//     if (data.type === 'Mesh') {
+//         object = new THREE.Mesh();
+//     } else if (data.type === 'LineSegments') {
+//         object = new THREE.LineSegments();
+//     } else {
+//         throw new Error(`Unsupported object type: ${data.type}`);
+//     }
+
+//     // Десериализация геометрии
+//     const geometryData = data.geometry;
+//     const geometry = new THREE.BufferGeometry();
+//     const attributes = geometryData.attributes;
+
+//     for (const name in attributes) {
+//         const attrData = attributes[name];
+//         // const arrayType = attrData.arrayType;
+//         // const ArrayConstructor = globalThis[arrayType];
+
+//         const array = arrayBuffers[attrData.bufferIndex];
+
+//         const attribute = new THREE.BufferAttribute(array, attrData.itemSize, attrData.normalized);
+//         geometry.setAttribute(name, attribute);
+//     }
+
+//     // Десериализация индексов (если есть)
+//     if (geometryData.index) {
+//         const indexData = geometryData.index;
+//         // const arrayType = indexData.arrayType;
+//         // const ArrayConstructor = globalThis[arrayType];
+
+//         const array = arrayBuffers[indexData.bufferIndex];
+
+//         const indexAttribute = new THREE.BufferAttribute(array, indexData.itemSize, indexData.normalized);
+//         geometry.setIndex(indexAttribute);
+//     }
+
+//     object.geometry = geometry;
+
+//     // Десериализация материала (упрощенно)
+//     const materialData = data.material;
+
+//     let material;
+//     if (materialData.type === 'MeshBasicMaterial') {
+//         material = new THREE.MeshBasicMaterial({ color: materialData.color });
+//     } else if (materialData.type === 'LineBasicMaterial') {
+//         material = new THREE.LineBasicMaterial({ color: materialData.color, linewidth: materialData.linewidth });
+// 	} else if (materialData.type === 'MeshMatcapMaterial') {
+//         material = new THREE.MeshMatcapMaterial({ color: materialData.color});
+//     } else {
+//         material = new THREE.MeshBasicMaterial();
+//     }
+
+//     object.material = material;
+
+//     // Устанавливаем матрицу трансформации
+// 	// console.log(data.matrix);
+//     object.matrix.fromArray(data.matrix);
+//     object.matrix.decompose(object.position, object.quaternion, object.scale);
+
+//     // Восстанавливаем пользовательские данные
+//     object.userData = data.userData;
+
+//     return object;
+// }
+
+function deserializeObject3D(data) {
     let object;
 
-    // Создаем объект нужного типа
     if (data.type === 'Mesh') {
         object = new THREE.Mesh();
     } else if (data.type === 'LineSegments') {
         object = new THREE.LineSegments();
+    } else if (data.type === 'Group' || data.type === 'Object3D') {
+        object = new THREE.Group();
     } else {
-        throw new Error(`Unsupported object type: ${data.type}`);
+        console.warn(`Неподдерживаемый тип объекта: ${data.type}, создается Object3D`);
+        object = new THREE.Object3D();
     }
 
-    // Десериализация геометрии
-    const geometryData = data.geometry;
+    object.uuid = data.uuid;
+    object.name = data.name;
+    object.userData = data.userData;
+    object.matrix.fromArray(data.matrix);
+    object.matrix.decompose(object.position, object.quaternion, object.scale);
+
+    if (data.geometry) {
+        object.geometry = deserializeGeometry(data.geometry);
+    }
+
+    // if (data.material) {
+    //     object.material = deserializeMaterial(data.material);
+    // }
+
+	if (Array.isArray(data.material)) {
+        // Если это массив материалов, десериализуем каждый
+        object.material = data.material.map(matData => deserializeMaterial(matData));
+    }
+	
+	if (!Array.isArray(data.material) && data.material !== undefined) {
+        // Если один материал
+        object.material = deserializeMaterial(data.material);
+    }
+
+
+    // Рекурсивная десериализация дочерних объектов
+    for (const childData of data.children) {
+        const child = deserializeObject3D(childData);
+        object.add(child);
+    }
+
+    return object;
+}
+
+function deserializeGeometry(data) {
     const geometry = new THREE.BufferGeometry();
-    const attributes = geometryData.attributes;
 
-    for (const name in attributes) {
-        const attrData = attributes[name];
-        // const arrayType = attrData.arrayType;
-        // const ArrayConstructor = globalThis[arrayType];
-
-        const array = arrayBuffers[attrData.bufferIndex];
-
+    // Десериализуем атрибуты
+    for (const name in data.attributes) {
+        const attrData = data.attributes[name];
+        const arrayType = attrData.arrayType;
+        const ArrayConstructor = globalThis[arrayType];
+        const array = new ArrayConstructor(attrData.buffer);
         const attribute = new THREE.BufferAttribute(array, attrData.itemSize, attrData.normalized);
         geometry.setAttribute(name, attribute);
     }
 
-    // Десериализация индексов (если есть)
-    if (geometryData.index) {
-        const indexData = geometryData.index;
-        // const arrayType = indexData.arrayType;
-        // const ArrayConstructor = globalThis[arrayType];
-
-        const array = arrayBuffers[indexData.bufferIndex];
-
+    // Десериализуем индексы
+    if (data.index) {
+        const indexData = data.index;
+        const arrayType = indexData.arrayType;
+        const ArrayConstructor = globalThis[arrayType];
+        const array = new ArrayConstructor(indexData.buffer);
         const indexAttribute = new THREE.BufferAttribute(array, indexData.itemSize, indexData.normalized);
         geometry.setIndex(indexAttribute);
     }
 
-    object.geometry = geometry;
+    return geometry;
+}
 
-    // Десериализация материала (упрощенно)
-    const materialData = data.material;
-
+function deserializeMaterial(data) {
     let material;
-    if (materialData.type === 'MeshBasicMaterial') {
-        material = new THREE.MeshBasicMaterial({ color: materialData.color });
-    } else if (materialData.type === 'LineBasicMaterial') {
-        material = new THREE.LineBasicMaterial({ color: materialData.color, linewidth: materialData.linewidth });
-	} else if (materialData.type === 'MeshMatcapMaterial') {
-        material = new THREE.MeshMatcapMaterial({ color: materialData.color});
-    } else {
-        material = new THREE.MeshBasicMaterial();
+	console.log("test data", data)
+
+    switch (data.type) {
+        case 'MeshBasicMaterial':
+            material = new THREE.MeshBasicMaterial();
+            break;
+        case 'MeshStandardMaterial':
+            material = new THREE.MeshStandardMaterial();
+            break;
+        case 'MeshPhongMaterial':
+            material = new THREE.MeshPhongMaterial();
+            break;
+        case 'MeshLambertMaterial':
+            material = new THREE.MeshLambertMaterial();
+            break;
+        case 'MeshMatcapMaterial':
+            material = new THREE.MeshMatcapMaterial();
+            break;
+        case 'LineBasicMaterial':
+            material = new THREE.LineBasicMaterial();
+            break;
+        // Добавьте другие типы материалов при необходимости
+        default:
+			console.log("material:", data);
+            console.warn(`Неподдерживаемый тип материала: ${data.type}, используется MeshBasicMaterial`);
+            material = new THREE.MeshBasicMaterial();
+            break;
     }
 
-    object.material = material;
+    material.uuid = data.uuid;
+    material.name = data.name;
 
-    // Устанавливаем матрицу трансформации
-	console.log(data.matrix);
-    object.matrix.fromArray(data.matrix);
-    object.matrix.decompose(object.position, object.quaternion, object.scale);
+    if (data.color !== null) material.color = new THREE.Color(data.color);
+    if (data.emissive !== null && material.emissive) material.emissive = new THREE.Color(data.emissive);
+    if (data.roughness !== null && material.roughness !== undefined) material.roughness = data.roughness;
+    if (data.metalness !== null && material.metalness !== undefined) material.metalness = data.metalness;
 
-    // Восстанавливаем пользовательские данные
-    object.userData = data.userData;
+    material.opacity = data.opacity;
+    material.transparent = data.transparent;
+    material.side = data.side;
+    material.depthTest = data.depthTest;
+    material.depthWrite = data.depthWrite;
+    material.wireframe = data.wireframe; 
+    if (data.map) material.map = deserializeTexture(data.map);
+    if (data.normalMap) material.normalMap = deserializeTexture(data.normalMap);
+    if (data.roughnessMap && material.roughnessMap !== undefined) material.roughnessMap = deserializeTexture(data.roughnessMap);
+    if (data.metalnessMap && material.metalnessMap !== undefined) material.metalnessMap = deserializeTexture(data.metalnessMap);
+    if (data.emissiveMap && material.emissiveMap !== undefined) material.emissiveMap = deserializeTexture(data.emissiveMap);
+    if (data.alphaMap) material.alphaMap = deserializeTexture(data.alphaMap);
 
-    return object;
+    // Восстановите другие свойства материала при необходимости
+
+    return material;
+}
+
+function deserializeTexture(data) {
+    let texture;
+
+    if (data.image && data.image.data) {
+        // Создаем текстуру из данных
+        const ArrayConstructor = globalThis[data.image.dataType];
+        const array = new ArrayConstructor(data.image.data);
+        const imageData = {
+            data: array,
+            width: data.image.width,
+            height: data.image.height,
+        };
+        texture = new THREE.DataTexture(
+            imageData.data,
+            imageData.width,
+            imageData.height
+        );
+        texture.needsUpdate = true;
+    } else if (data.image && data.image.src) {
+        // Загружаем текстуру из изображения
+        texture = new THREE.TextureLoader().load(data.image.src);
+    } else {
+        texture = new THREE.Texture();
+    }
+
+    texture.uuid = data.uuid;
+    texture.name = data.name;
+    texture.wrapS = data.wrapS !== undefined ? data.wrapS : THREE.ClampToEdgeWrapping;
+    texture.wrapT = data.wrapT !== undefined ? data.wrapT : THREE.ClampToEdgeWrapping;
+    texture.repeat = new THREE.Vector2().fromArray(data.repeat || [1, 1]);
+    texture.offset = new THREE.Vector2().fromArray(data.offset || [0, 0]);
+    texture.rotation = data.rotation !== undefined ? data.rotation : 0;
+
+    // Восстановите другие свойства текстуры при необходимости
+
+    return texture;
 }
 
 	async function initializeWorker() {
@@ -359,7 +540,7 @@ function deserializeObject3D(data, arrayBuffers) {
 
 
 			// Добавляем объект в сцену
-			sm.updateScene([object3D]);
+			sm.updateScene(object3D);
 			spinner = false;
 
 			// const mg = new MeshGenerator(geometry); // Для первого меша
@@ -389,11 +570,17 @@ function deserializeObject3D(data, arrayBuffers) {
 
 		let files = [];
         const items = event.dataTransfer.files;
+		const allowedExtensions = ['.stl', '.obj', '.amf', '.3mf', '.ply'];
 
         for (let i=0; i < items.length; i++) {
 			const file = event.dataTransfer.files[i];
 
-			if (!file["name"].toLowerCase().endsWith(".stl")) return;
+			// if (!file["name"].toLowerCase().endsWith(".stl")) return;
+
+			const fileName = file["name"].toLowerCase();
+       		const isValidFile = allowedExtensions.some(ext => fileName.endsWith(ext));
+
+        	if (!isValidFile) return;
 
             files.push(file);
         };
